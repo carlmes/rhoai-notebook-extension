@@ -8,7 +8,7 @@ RUN groupadd -r datascientist && useradd -m -r -g datascientist datascientist
  
 # Install necessary Conda packages and create conda env (This will change for every DS usecase)
 COPY environment.yml /tmp/environment.yml
-RUN conda config --append channels conda-forge && \
+RUN apt-get update && apt-get -y install gcc python3-dev && \
     conda env create -f /tmp/environment.yml
 
 # ==================================
