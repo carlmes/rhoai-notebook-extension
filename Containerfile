@@ -1,36 +1,48 @@
-# ================================
-# Stage 1: Conda environment setup
-# ================================
-FROM continuumio/miniconda3 AS conda-env
-
-# Create a non-root user
-RUN groupadd -r datascientist && useradd -m -r -g datascientist datascientist
+ # Image source: https://github.com/opendatahub-io/notebooks/tree/main/jupyter/pytorch/ubi9-python-3.9
+ FROM quay.io/opendatahub/workbench-images:jupyter-pytorch-ubi9-python-3.9-2024a-20240528-3b4c246
  
-# Install necessary Conda packages and create conda env (This will change for every DS usecase)
-COPY environment.yml /tmp/environment.yml
-RUN apt-get update && apt-get -y install gcc python3-dev && \
-    conda env create -f /tmp/environment.yml
-
-# ==================================
-# Stage 2: PyTorch with CUDA support 
-# ==================================
-
-# Image source: https://github.com/opendatahub-io/notebooks/tree/main/jupyter/pytorch/ubi9-python-3.9
-FROM quay.io/opendatahub/workbench-images:jupyter-pytorch-ubi9-python-3.9-2024a-20240528-3b4c246
+# Switch to root user
+USER 0
  
-# Copy Conda environment from the previous stage
-COPY --from=conda-env /opt/conda /opt/conda
+# Pull Miniconda binary
+#RUN curl --insecure -uu632298:xxx -L -O https://artifactory.wellsfargo.com/artifactory/generic-nonapp-pe-virtual/Anaconda/Miniconda/23.1.0-1/Miniconda-23.1.0-1.tar && \
+RUN curl -L -O https://repo.anaconda.com/miniconda/Miniconda3-py39_23.11.0-2-Linux-x86_64.sh && \
+    #tar -xvf Miniconda-23.1.0-1.tar -C /tmp && \
+    mv Miniconda3-py39_23.11.0-2-Linux-x86_64.sh /tmp/Miniconda.sh && \
+    chmod +x /tmp/Miniconda.sh && \
+    bash /tmp/Miniconda.sh -bp /opt/conda && \
+    rm /tmp/Miniconda.sh
  
 # Set environment variables to ensure that Conda is initialized
 ENV PATH /opt/conda/bin:$PATH
-ENV CONDA_DEFAULT_ENV machine-learning-env
-ENV CONDA_PREFIX /opt/conda/envs/machine-learning-env
  
-# Switch to the non-root user
-# USER datascientist
+# Copy configurations
+# COPY libs/.pip .pip
+# COPY libs/.condarc .condarc
  
-# Expose the port for Jupyter Notebook
-# EXPOSE 8888
+# Copy Conda lib and pip requirements
+COPY libs/environment.yaml environment.yaml
+COPY libs/requirements.txt requirements.txt
  
-# Start Jupyter Notebook
-# CMD ["jupyter", "notebook", "--ip='0.0.0.0'", "--port=8888", "--no-browser", "--allow-root"]
+# Execute installation if conda packages
+RUN if [ -s environment.yaml ]; then \
+        echo "Installing conda packages....."; \
+        conda install -y --file environment.yaml && conda clean -a -y; \
+    else \
+        echo "environment.yaml is empty!"; \
+    fi
+ 
+# Execute installation of pip packages
+RUN if [ -s requirements.txt ]; then \
+        echo "Installing pip packages....."; \
+        pip install -r requirements.txt; \
+    else \
+        echo "requirements.txt is empty!"; \
+    fi
+ 
+ 
+# Switch back to non-root user
+USER 1001
+RUN fix-permissions /opt/app-root -P 
+WORKDIR /opt/app-root/src
+ 
